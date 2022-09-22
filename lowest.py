@@ -1,21 +1,16 @@
-from collections import defaultdict
-from pprint import pprint
-import random
-
-
 import os.path
 
-import google.auth
+from collections import defaultdict
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from pprint import pprint
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/presentations']
 
-# The ID of a sample presentation.
 PRESENTATION_ID = '1MUn3S6r8RowPUWJXot3V2JIZ9xUFOAyLEFdmfXfgWl8'
 
 
@@ -37,24 +32,6 @@ def print_guesses(participant_guesses, winning_number):
     print('2 guesses left:', remaining[2])
     print('1 guesses left:', remaining[1])
     print('0 guesses left:', remaining[0])
-
-def print_guesses2(participant_guesses, winning_number):
-
-    odd = True
-    for participant in sorted(participant_guesses):
-        print("{: >25}".format(participant), end=' ')
-        #print("{: >20} {: >20} {: >20}".format(*row))
-        for guess in participant_guesses[participant]:
-            if guess > winning_number:
-                print('X', end=' ')
-            else:
-                print('?', end=' ')
-        if odd:
-            print("\t\t", end='')
-            odd = False
-        else:
-            odd = True
-            print()
 
 
 def slide_setup():
@@ -91,14 +68,6 @@ def slide_setup():
 def main():
     table_id, service = slide_setup()
 
-    participants = ['Calvin Wang', 'David Altuve', 'Lauren Davis', 'Chris Reynolds', 'George Guo', 'Justin Elms',
-                    'Keith Loy', 'Newell Rose', 'Omar Mujahid', 'Rob Battaglia', 'Shuaiyuan Zhou', 'Stephen Kattner',
-                    'Amr Alaas', 'Brian Alexander', 'Natalie Rees', 'Stacy Chen', 'Tonaz Perez Valadez', 'Janie Clarke',
-                    'Jeff Sumner', 'Jim Sigler', 'Tim Zenchenko', 'Andrew Vinas', 'Olivia Griffin', 'Sarah Johnson',
-                    'Steven Boydston']
-    # Not invite to game  'Alexander Mazaykin', 'Chen Yang', 'Marat Chafigouline', 'Sarah Holt',
-    # 'Kurtis White', 'Ada Song', 'James Hafner', 'Susan Le'
-    #  'CJ Hong']
     guesses = defaultdict(list)
     participant_guesses = defaultdict(list)
     top_range = 100
