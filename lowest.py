@@ -1,4 +1,8 @@
+import json
+import math
 import os.path
+import random
+import time
 
 from collections import defaultdict
 from google.auth.transport.requests import Request
@@ -12,6 +16,44 @@ from pprint import pprint
 SCOPES = ['https://www.googleapis.com/auth/presentations']
 
 PRESENTATION_ID = '1MUn3S6r8RowPUWJXot3V2JIZ9xUFOAyLEFdmfXfgWl8'
+
+TABLE_ID = ''
+
+OATH_SERVICE = ''
+
+
+def make_charts():
+    pass
+    # def is_prime(n):
+    #     for i in range(2, n):
+    #         if (n % i) == 0:
+    #             return False
+    #     return True
+    # odd = 0
+    # even = 0
+    # divisible = defaultdict(int)
+    # for num in guesses:
+    #     for i in range(2, num):
+    #         if (num % i) == 0 and is_prime(i):
+    #             divisible[i] += len(guesses[num])
+    #             break
+    #     if is_prime(num):
+    #         if num == 2:
+    #             eprime += len(guesses[num])
+    #         else:
+    #             prime += len(guesses[num])
+    # import matplotlib.pyplot as plt
+    # labels = 'Odd Non Prime guesses', 'Odd Prime Guesses', 'Even Prime Guesses (2)', 'Even Non Prime Guesses'
+    # sizes = [odd, prime, eprime, even]
+    # fig1, ax1 = plt.subplots()
+    # ax1.pie(sizes, labels=labels, autopct='%1.1f%%',
+    #         shadow=True, startangle=90)
+    # ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    # plt.show()
+    #
+    # plt.bar(range(len(divisible)), list(divisible.values()), align='center')
+    # plt.xticks(range(len(divisible)), list(divisible.keys()))
+    # plt.show()
 
 
 def print_guesses(participant_guesses, winning_number):
@@ -38,6 +80,8 @@ def slide_setup():
     """Shows basic usage of the Slides API.
     Prints the number of slides and elements in a sample presentation.
     """
+    global TABLE_ID
+    global OATH_SERVICE
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -53,31 +97,155 @@ def slide_setup():
             token.write(creds.to_json())
 
     try:
-        service = build('slides', 'v1', credentials=creds)
-        presentation = service.presentations().get(
+        OATH_SERVICE = build('slides', 'v1', credentials=creds)
+        presentation = OATH_SERVICE.presentations().get(
             presentationId=PRESENTATION_ID).execute()
-        slide = presentation.get('slides')[0]
-        table_id = slide.get('pageElements')[0].get('objectId')
+        slide = presentation.get('slides')[2]
+        TABLE_ID = slide.get('pageElements')[0].get('objectId')
     except HttpError as error:
         print(f"An error occurred: {error}")
         return error
 
-    return table_id, service
+
+def delete_cell_json(row, col):
+    return {'deleteText':
+                {"objectId": TABLE_ID, "cellLocation": {"rowIndex": row, "columnIndex": col},
+                 "textRange": {"type": "ALL"}}}
+
+
+def insert_cell_json(row, col, text):
+    return {'insertText': {"objectId": TABLE_ID, "cellLocation": {"rowIndex": row, "columnIndex": col}, "text": text,
+                           "insertionIndex": 0}}
+
+def determine_color(num_picks):
+    return 1, 1, 1
+    # if num_picks > 1:
+    #     return 1, 0.1, 0.1
+    # elif num_picks == 0:
+    #     return .4, .4, .4
+    # else:
+    #     return 1, 1, 0
+
+
+def update_color_json(row, col, color):
+    return {
+            "updateTableCellProperties": {
+                "objectId": TABLE_ID,
+                "tableRange": {
+                    "location": {
+                        "rowIndex": row,
+                        "columnIndex": col
+                    },
+                    "rowSpan": 1,
+                    "columnSpan": 1
+                },
+                "tableCellProperties": {
+                    "tableCellBackgroundFill": {
+                        "solidFill": {
+                            "color": {
+                                "rgbColor": {
+                                    "red": color[0],
+                                    "green": color[1],
+                                    "blue": color[2]
+                                }
+                            }
+                        }
+                    }
+                },
+                "fields": "tableCellBackgroundFill.solidFill.color"
+            }
+        }
+
+def get_who_string(who_picked):
+    who_str = ''
+    if len(who_picked) == 0:
+        return 'Noone'
+
+    who_str = ', '.join(who_picked)
+    if len(who_str) > 30:
+        who_str = ''
+        for person in who_picked:
+            who_str += person.split()[0] + ', '
+        who_str = who_str[:-2]
+    if len(who_str) > 30:
+        who_str = ''
+        for person in who_picked:
+            who_str += person.split()[0][0] + person.split()[1][0] + ','
+        who_str = who_str[:-1]
+    if len(who_str) > 30:
+        who_str = who_str[:27] + '...'
+    return who_str
+
+
+def get_remaining(participant_guesses, remaining_guesses):
+    remaining = defaultdict(list)
+
+    for participant in sorted(participant_guesses):
+        left = 0
+        for guess in participant_guesses[participant]:
+            if guess in remaining_guesses:
+                left += 1
+
+        remaining[left].append(participant)
+
+    remaining_strings = defaultdict(str)
+    remaining_strings[0] = get_who_string(remaining[0])
+    remaining_strings[1] = get_who_string(remaining[1])
+    remaining_strings[2] = get_who_string(remaining[2])
+    remaining_strings[3] = get_who_string(remaining[3])
+    remaining_strings[4] = get_who_string(remaining[4])
+    remaining_strings[5] = get_who_string(remaining[5])
+    return remaining_strings
+
+
+def set_square(pick, num_picks, who_picked, remaining_participant_strings):
+    col_index = (pick % 10) + 1
+    row_index = math.floor(pick / 10) + 2
+
+
+    requests = [
+        delete_cell_json(row_index, col_index),
+        insert_cell_json(row_index, col_index, str(num_picks)),
+        update_color_json(row_index, col_index, determine_color(num_picks)),
+        # Current Guess
+        delete_cell_json(0, 13),
+        insert_cell_json(0, 13, 'Current Guess: ' + str(pick)),
+        # who picked
+        delete_cell_json(1, 13),
+        insert_cell_json(1, 13, get_who_string(who_picked)),
+        # Remaining guesses
+        delete_cell_json(6, 13),
+        insert_cell_json(6, 13, remaining_participant_strings[5]),
+        delete_cell_json(7, 13),
+        insert_cell_json(7, 13, remaining_participant_strings[4]),
+        delete_cell_json(8, 13),
+        insert_cell_json(8, 13, remaining_participant_strings[3]),
+        delete_cell_json(9, 13),
+        insert_cell_json(9, 13, remaining_participant_strings[2]),
+        delete_cell_json(10, 13),
+        insert_cell_json(10, 13, remaining_participant_strings[1]),
+        delete_cell_json(11, 13),
+        insert_cell_json(11, 13, remaining_participant_strings[0]),
+    ]
+    body = {
+        'requests': requests
+    }
+    time.sleep(1.1)
+    response = OATH_SERVICE.presentations().batchUpdate(
+        presentationId=PRESENTATION_ID, body=body).execute()
 
 
 def main():
-    table_id, service = slide_setup()
+    slide_setup()
 
     guesses = defaultdict(list)
     participant_guesses = defaultdict(list)
     top_range = 100
 
-
     def set_guesses(participant, nums):
-        for num in nums:
-            guesses[num].append(participant)
-            participant_guesses[participant].append(num)
-
+        for n in nums:
+            guesses[n].append(participant)
+            participant_guesses[participant].append(n)
 
     set_guesses('Calvin Wang', [17, 19, 23, 29, 31])
     set_guesses('David Altuve', [1, 9, 15, 21, 49])
@@ -110,83 +278,17 @@ def main():
     set_guesses('Ruzana Nekhay', [11, 13, 17, 19, 23])
     set_guesses('Maxwell Rose', [6, 12, 14, 18, 28])
 
-    def is_prime(n):
-      for i in range(2,n):
-        if (n%i) == 0:
-          return False
-      return True
-    odd = 0
-    even = 0
-    prime = 0
-    eprime = 0
-    total = 0
-    divisible = defaultdict(int)
     conflicts = defaultdict(int)
     for num in guesses:
-        print(num, len(guesses[num]))
-        for i in range(2, num):
-            # print(i, num)
-            if (num % i) == 0 and is_prime(i):
-                divisible[i] += len(guesses[num])
-        total += len(guesses[num])
         conflicts[len(guesses[num])] += 1
-        if is_prime(num):
-            if num == 2:
-                eprime += len(guesses[num])
-            else:
-                prime += len(guesses[num])
-        elif (num % 2) == 0:
-            even += len(guesses[num])
-        else:
-            odd += len(guesses[num])
 
-    requests = [
-        {
-            'deleteText': {
-                "objectId": table_id,
-                "cellLocation": {
-                    "rowIndex": 3,
-                    "columnIndex": 3
-                },
-                "textRange": {
-                    "type": "ALL",
-                }
-            }
-        },
-        {
-            'insertText': {
-                "objectId": table_id,
-                "cellLocation": {
-                    "rowIndex": 3,
-                    "columnIndex": 3
-                },
-                "text": 'different',
-                "insertionIndex": 0
-            }
-        }
-    ]
-    body = {
-        'requests': requests
-    }
-    response = service.presentations().batchUpdate(
-        presentationId=PRESENTATION_ID, body=body).execute()
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-    labels = 'Odd Non Prime guesses', 'Odd Prime Guesses', 'Even Prime Guesses (2)', 'Even Non Prime Guesses'
-    sizes = [odd, prime, eprime, even]
-    fig1, ax1 = plt.subplots()
-    ax1.pie(sizes, labels=labels, autopct='%1.1f%%',
-            shadow=True, startangle=90)
-    ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-    plt.show()
-
-
-
-    plt.bar(range(len(divisible)), list(divisible.values()), align='center')
-    plt.xticks(range(len(divisible)), list(divisible.keys()))
-    plt.show()
-
+    remaining_guesses = list(range(1, 120))
+    print(remaining_guesses)
+    while len(remaining_guesses) > 0:
+        pick = remaining_guesses.pop(random.randrange(len(remaining_guesses)))
+        remaining_participants_strings = get_remaining(participant_guesses, remaining_guesses)
+        set_square(pick, len(guesses[pick]), guesses[pick], remaining_participants_strings)
+    exit()
 
     print("Guesses")
     pprint(guesses)
@@ -198,7 +300,7 @@ def main():
         print(guesses[winning_number])
         print('Remaining tries')
         print_guesses(participant_guesses, winning_number)
-        x= input()
+        input()
         if len(guesses[winning_number]) == 1:
             pass
             # winner = guesses[winning_number][0]
@@ -209,6 +311,8 @@ def main():
         winning_number += 1
 
     print(f"Give {winner} a prize for guessing: {winning_number}")
+
+
 
 
 if __name__ == '__main__':
