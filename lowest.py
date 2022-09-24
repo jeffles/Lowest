@@ -12,8 +12,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from pprint import pprint
 
-# TODO - Current winner display
-# TODO - ELiminate all higher guesses when new lowest unique number is revealed
+# TODO - Slack interface for playing? (A- no, needs security approval)
+# TODO - manual entry of people
+# TODO - sort name displays
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/presentations']
@@ -120,6 +121,7 @@ def insert_cell_json(row, col, text):
     return {'insertText': {"objectId": TABLE_ID, "cellLocation": {"rowIndex": row, "columnIndex": col}, "text": text,
                            "insertionIndex": 0}}
 
+
 def determine_color(num_picks):
     # return 1, 1, 1
     if num_picks > 1:
@@ -159,11 +161,12 @@ def update_color_json(row, col, color):
             }
         }
 
+
 def get_who_string(who_picked, max_length):
     who_str = ''
     if len(who_picked) == 0:
         return 'Noone'
-
+    who_picked.sort()
     who_str = ', '.join(who_picked)
     if len(who_str) > max_length:
         who_str = ''
@@ -171,12 +174,15 @@ def get_who_string(who_picked, max_length):
             who_str += person.split()[0] + ', '
         who_str = who_str[:-2]
     if len(who_str) > max_length:
-        who_str = ''
-        for person in who_picked:
-            who_str += person.split()[0][0] + person.split()[1][0] + ','
-        who_str = who_str[:-1]
-    if len(who_str) > max_length:
-        who_str = who_str[:max_length-3] + '...'
+        wp_initials = []
+        for w in who_picked:
+            wp_initials.append(w.split()[0][0] + w.split()[1][0])
+        wp_initials.sort()
+        who_str = ', '.join(wp_initials)
+#        who_str = who_str[:-1]
+
+    # if len(who_str) > max_length:
+    #     who_str = who_str[:max_length-3] + '...'
     return who_str
 
 
@@ -188,7 +194,8 @@ def get_remaining(participant_guesses, remaining_guesses):
         for guess in participant_guesses[participant]:
             if guess in remaining_guesses:
                 left += 1
-
+        if left > 5:
+            left = 5
         remaining[left].append(participant)
 
     remaining_strings = defaultdict(str)
@@ -217,8 +224,15 @@ def eliminate_squares(bigger, guesses):
         'requests': requests
     }
 
-    response = OATH_SERVICE.presentations().batchUpdate(
-        presentationId=PRESENTATION_ID, body=body).execute()
+    try:
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        time.sleep(62)
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
+
 
 
 def reset_slides(participants):
@@ -256,8 +270,14 @@ def reset_slides(participants):
     body = {
         'requests': requests
     }
-    response = OATH_SERVICE.presentations().batchUpdate(
-        presentationId=PRESENTATION_ID, body=body).execute()
+    try:
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        time.sleep(62)
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
 
 
 def set_square(pick, num_picks, who_picked, remaining_participant_strings, winner):
@@ -295,8 +315,14 @@ def set_square(pick, num_picks, who_picked, remaining_participant_strings, winne
     body = {
         'requests': requests
     }
-    response = OATH_SERVICE.presentations().batchUpdate(
-        presentationId=PRESENTATION_ID, body=body).execute()
+    try:
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        time.sleep(62)
+        response = OATH_SERVICE.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID, body=body).execute()
 
 
 def main():
@@ -304,7 +330,8 @@ def main():
 
     guesses = defaultdict(list)
     participant_guesses = defaultdict(list)
-    top_range = 89
+    top_range = 90
+
 
 
     def set_guesses(participant, nums):
@@ -316,10 +343,10 @@ def main():
                     'Keith Loy', 'Newell Rose', 'Omar Mujahid', 'Rob Battaglia', 'Shuaiyuan Zhou', 'Stephen Kattner',
                     'Amr Alaas', 'Brian Alexander', 'Natalie Rees', 'Stacy Chen', 'Tonaz Perez Valadez', 'Janie Clarke',
                     'Jeff Sumner', 'Jim Sigler', 'Tim Zenchenko', 'Andrew Vinas', 'Olivia Griffin', 'Sarah Johnson',
-                    'Steven Boydston']
+                    'Steven Boydston', 'Stewart Sumner', 'Juliet Sumner', 'Sarah Sumner']
     for guest in participants:
         set_guesses(guest, random.sample(range(1, top_range), 5))
-
+    print(participant_guesses['Stewart Sumner'])
     # set_guesses('Calvin Wang', [17, 19, 23, 29, 31])
     # set_guesses('David Altuve', [1, 9, 15, 21, 49])
     # set_guesses('Lauren Davis', [11, 13, 17, 53, 97])
@@ -328,6 +355,7 @@ def main():
     # set_guesses('Justin Elms', [7, 9, 11, 13, 15])
     # set_guesses('Keith Loy', [3, 6, 7, 8, 9])
     # set_guesses('Newell Rose', [16, 20, 25, 30, 36])
+    #
     # set_guesses('Omar Mujahid', [3, 9, 17, 22, 101])
     # set_guesses('Rob Battaglia', [5, 8, 11, 13, 14])
     # set_guesses('Shuaiyuan Zhou', [1, 7, 11, 29, 38])
